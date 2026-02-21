@@ -1,402 +1,810 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
-import type { CompetitorReport, CompetitorThumbnail } from "@/lib/types";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import type { Industry, Category, App, AppScreenshot } from "@/lib/types";
 
-interface CompetitorUIViewProps {
-  reports: CompetitorReport[];
+/* ─── Props ──────────────────────────────────────────────────────────── */
+
+interface Props {
+  industries: Industry[];
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("ja-JP", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+/* ─── View state ─────────────────────────────────────────────────────── */
+
+type ViewState =
+  | { type: "landing" }
+  | { type: "industry"; industryId: string }
+  | { type: "app"; industryId: string; appId: string };
+
+/* ─── Industry colors ────────────────────────────────────────────────── */
+
+const INDUSTRY_COLORS: Record<string, { gradient: string }> = {
+  finance:       { gradient: "from-indigo-500/10 to-indigo-600/5" },
+  news:          { gradient: "from-blue-500/10 to-blue-600/5" },
+  ecommerce:     { gradient: "from-amber-500/10 to-amber-600/5" },
+  food:          { gradient: "from-orange-500/10 to-orange-600/5" },
+  healthcare:    { gradient: "from-teal-500/10 to-teal-600/5" },
+  travel:        { gradient: "from-sky-500/10 to-sky-600/5" },
+  communication: { gradient: "from-violet-500/10 to-violet-600/5" },
+};
+
+function getIndustryGradient(id: string) {
+  return INDUSTRY_COLORS[id]?.gradient ?? "from-slate-500/10 to-slate-600/5";
 }
 
-function avgScore(scores: { score: number }[]): number {
-  if (scores.length === 0) return 0;
-  return Math.round((scores.reduce((s, c) => s + c.score, 0) / scores.length) * 10) / 10;
-}
+/* ─── Platform badge ─────────────────────────────────────────────────── */
 
-function scoreColor(score: number): string {
-  if (score >= 4) return "#059669";
-  if (score >= 3) return "#d97706";
-  return "#e11d48";
-}
-
-function domainOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
-export default function CompetitorUIView({ reports }: CompetitorUIViewProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [presetFilter, setPresetFilter] = useState<string>("all");
-  const [previewImage, setPreviewImage] = useState<CompetitorThumbnail | null>(null);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 150);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  const presets = useMemo(() => {
-    const set = new Set(reports.map((r) => r.preset));
-    return ["all", ...Array.from(set).sort()];
-  }, [reports]);
-
-  const filtered = useMemo(() => {
-    return reports.filter((r) => {
-      if (presetFilter !== "all" && r.preset !== presetFilter) return false;
-      if (debouncedSearch) {
-        const q = debouncedSearch.toLowerCase();
-        const haystack = r.urls.join(" ").toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [reports, presetFilter, debouncedSearch]);
-
+function PlatformBadge({ platform }: { platform: string }) {
+  const styles: Record<string, string> = {
+    iOS:     "bg-platform-ios-bg text-platform-ios",
+    Android: "bg-platform-android-bg text-platform-android",
+    Web:     "bg-platform-web-bg text-platform-web",
+  };
   return (
-    <div className="max-w-[1200px] mx-auto px-5 py-10">
-      {/* Header */}
-      <header>
-        <h1 className="text-center text-3xl font-extrabold text-text-bright mb-2">
-          Competitor UI Viewer
-        </h1>
-        <p className="text-center text-sm text-text-dim mb-8">
-          競合UIの自動撮影・分析レポート — サムネイル & プレビュー
-        </p>
-      </header>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${styles[platform] ?? "bg-tag-bg text-tag-text"}`}>
+      {platform}
+    </span>
+  );
+}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Total Reports" value={String(reports.length)} />
-        <StatCard
-          label="URLs Analyzed"
-          value={String(new Set(reports.flatMap((r) => r.urls)).size)}
-        />
-        <StatCard
-          label="Avg Score"
-          value={
-            reports.length > 0
-              ? String(avgScore(reports.flatMap((r) => r.scores)))
-              : "-"
-          }
-        />
-        <StatCard
-          label="Latest"
-          value={
-            reports.length > 0
-              ? new Date(reports[0].timestamp).toLocaleDateString("ja-JP")
-              : "-"
-          }
-        />
-      </div>
+/* ─── Breadcrumb ─────────────────────────────────────────────────────── */
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="relative flex-1 min-w-[200px]">
-          <input
-            type="text"
-            placeholder="URLで検索..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-[10px] border border-border bg-bg-card text-[0.88rem] text-text-primary placeholder:text-text-dim focus:outline-none focus:border-accent-blue"
-          />
-        </div>
+interface BreadcrumbItem {
+  label: string;
+  onClick?: () => void;
+}
 
-        <div className="flex gap-1.5">
-          {presets.map((p) => (
+function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
+  return (
+    <nav className="flex items-center gap-1.5 text-sm mb-6">
+      {items.map((item, i) => (
+        <span key={i} className="flex items-center gap-1.5">
+          {i > 0 && <span className="text-nav-separator">/</span>}
+          {item.onClick ? (
             <button
-              key={p}
-              onClick={() => setPresetFilter(p)}
-              className={`px-3 py-1.5 rounded-[10px] text-[0.78rem] font-medium transition-colors ${
-                presetFilter === p
-                  ? "bg-accent-blue text-white"
-                  : "bg-bg-hover text-text-dim hover:text-text-primary"
-              }`}
+              onClick={item.onClick}
+              className="text-nav-text hover:text-nav-text-active hover:bg-nav-hover-bg px-1.5 py-0.5 rounded-md transition-colors cursor-pointer"
             >
-              {p === "all" ? "All" : p}
+              {item.label}
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Reports List */}
-      {filtered.length === 0 ? (
-        <EmptyState hasReports={reports.length > 0} />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((report) => (
-            <ReportCard key={report.id} report={report} onThumbnailClick={setPreviewImage} />
-          ))}
-        </div>
-      )}
-
-      {/* Screenshot Preview Modal */}
-      {previewImage && (
-        <ScreenshotPreview
-          thumbnail={previewImage}
-          onClose={() => setPreviewImage(null)}
-        />
-      )}
-
-      {/* CLI Usage Hint */}
-      <div className="mt-12 p-6 rounded-[14px] border border-border bg-bg-card">
-        <h3 className="text-sm font-semibold text-text-bright mb-3">
-          CLI Usage
-        </h3>
-        <div className="space-y-2 text-[0.82rem] text-text-dim font-mono">
-          <p># product-hub で分析を実行</p>
-          <p className="text-text-primary">pnpm competitor:analyze https://example.com</p>
-          <p className="mt-2"># レポートをこのビューアに同期</p>
-          <p className="text-text-primary">pnpm scan</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="p-4 rounded-[14px] border border-border bg-bg-card text-center">
-      <div className="text-2xl font-bold text-text-bright">{value}</div>
-      <div className="text-xs text-text-dim mt-1">{label}</div>
-    </div>
-  );
-}
-
-function ReportCard({
-  report,
-  onThumbnailClick,
-}: {
-  report: CompetitorReport;
-  onThumbnailClick: (thumb: CompetitorThumbnail) => void;
-}) {
-  const avg = avgScore(report.scores);
-  const domains = report.urls.map(domainOf);
-  const color = scoreColor(avg);
-
-  return (
-    <div className="p-5 rounded-[14px] border border-border bg-bg-card hover:border-[rgba(0,0,0,0.15)] transition-all hover:-translate-y-0.5">
-      {/* Header row */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0">
-          <div className="text-[0.82rem] font-semibold text-text-bright truncate">
-            {domains.join(" vs ")}
-          </div>
-          <div className="text-[0.72rem] text-text-dim mt-0.5">
-            {formatDate(report.timestamp)}
-          </div>
-        </div>
-        {avg > 0 && (
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ml-3"
-            style={{ background: color }}
-          >
-            {avg}
-          </div>
-        )}
-      </div>
-
-      {/* Scores per URL */}
-      {report.scores.length > 0 && (
-        <div className="space-y-1.5 mb-3">
-          {report.scores
-            .filter((s) => s.viewport === "desktop")
-            .map((s) => (
-              <div key={s.url} className="flex items-center gap-2">
-                <div className="text-[0.75rem] text-text-dim truncate flex-1">
-                  {domainOf(s.url)}
-                </div>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <div
-                      key={n}
-                      className="w-4 h-1.5 rounded-sm"
-                      style={{
-                        background:
-                          n <= s.score ? scoreColor(s.score) : "#e2e8f0",
-                      }}
-                    />
-                  ))}
-                </div>
-                <div
-                  className="text-[0.72rem] font-semibold w-5 text-right"
-                  style={{ color: scoreColor(s.score) }}
-                >
-                  {s.score}
-                </div>
-              </div>
-            ))}
-        </div>
-      )}
-
-      {/* Tags */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        <span className="px-2 py-0.5 rounded-full text-[0.7rem] bg-[#eff6ff] text-[#2563eb]">
-          {report.preset}
+          ) : (
+            <span className="text-nav-text-active font-medium px-1.5 py-0.5">{item.label}</span>
+          )}
         </span>
-        {report.viewports.map((v) => (
-          <span
-            key={v}
-            className={`px-2 py-0.5 rounded-full text-[0.7rem] ${
-              v === "mobile"
-                ? "bg-[#f5f3ff] text-[#7c3aed]"
-                : "bg-[#f1f5f9] text-[#475569]"
-            }`}
-          >
-            {v}
+      ))}
+    </nav>
+  );
+}
+
+/* ─── Search bar ─────────────────────────────────────────────────────── */
+
+function SearchBar({
+  value,
+  onChange,
+  placeholder,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+  }, [autoFocus]);
+
+  return (
+    <div className="relative">
+      <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.35-4.35" strokeLinecap="round" />
+      </svg>
+      <input
+        ref={ref}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full pl-10 pr-4 py-2.5 bg-bg-input border border-border rounded-[10px] text-sm text-text-primary placeholder:text-text-placeholder focus:outline-none focus:border-border-focus focus:shadow-[var(--shadow-focus)] transition-all"
+      />
+      {value && (
+        <button
+          onClick={() => onChange("")}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-primary p-0.5 cursor-pointer"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ─── Stats header ───────────────────────────────────────────────────── */
+
+function StatsBar({ industries }: { industries: Industry[] }) {
+  const totalApps = industries.reduce(
+    (sum, ind) => sum + ind.categories.reduce((s, cat) => s + cat.apps.length, 0),
+    0
+  );
+  const totalCategories = industries.reduce((sum, ind) => sum + ind.categories.length, 0);
+
+  return (
+    <div className="grid grid-cols-3 gap-3 mb-8">
+      {[
+        { value: industries.length, label: "業界" },
+        { value: totalCategories, label: "カテゴリ" },
+        { value: totalApps, label: "アプリ" },
+      ].map((stat) => (
+        <div key={stat.label} className="bg-bg-card border border-border-card rounded-xl px-4 py-3 text-center shadow-[var(--shadow-card)]">
+          <div className="text-2xl font-bold text-text-bright">{stat.value}</div>
+          <div className="text-xs text-text-dim mt-0.5">{stat.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Industry card (landing) ────────────────────────────────────────── */
+
+function IndustryCard({
+  industry,
+  onClick,
+}: {
+  industry: Industry;
+  onClick: () => void;
+}) {
+  const gradient = getIndustryGradient(industry.id);
+  const appCount = industry.categories.reduce((sum, cat) => sum + cat.apps.length, 0);
+
+  return (
+    <button
+      onClick={onClick}
+      className="group relative text-left w-full bg-bg-card border border-border-card rounded-2xl p-5 shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition-all duration-200 cursor-pointer overflow-hidden"
+    >
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-200`} />
+      <div className="relative">
+        <div className="text-3xl mb-3">{industry.icon}</div>
+        <h3 className="text-base font-semibold text-text-bright mb-0.5">{industry.name}</h3>
+        <p className="text-[11px] text-text-dim mb-3">{industry.nameEn}</p>
+        <p className="text-xs text-text-dim leading-relaxed mb-4 line-clamp-2">{industry.description}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 text-[11px] text-text-dim">
+            <span>{industry.categories.length} カテゴリ</span>
+            <span>{appCount} アプリ</span>
+          </div>
+          <svg className="w-4 h-4 text-text-dim group-hover:text-accent-blue group-hover:translate-x-0.5 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ─── App card (within category) ─────────────────────────────────────── */
+
+function AppCard({ app, onClick }: { app: App; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="group text-left w-full bg-bg-card border border-border-card rounded-xl p-4 shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition-all duration-200 cursor-pointer"
+    >
+      <div className="flex items-start justify-between mb-2.5">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-sm font-semibold text-text-bright truncate">{app.name}</h4>
+          <p className="text-[11px] text-text-dim mt-0.5">{app.company}</p>
+        </div>
+        <svg className="w-4 h-4 text-text-dim group-hover:text-accent-blue shrink-0 ml-2 mt-0.5 group-hover:translate-x-0.5 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+
+      <div className="flex items-center gap-1.5 mb-3">
+        {app.platform.map((p) => (
+          <PlatformBadge key={p} platform={p} />
+        ))}
+      </div>
+
+      <p className="text-xs text-text-dim leading-relaxed line-clamp-2 mb-3">{app.description}</p>
+
+      <div className="flex flex-wrap gap-1.5">
+        {app.features.slice(0, 3).map((f) => (
+          <span key={f} className="inline-flex px-2 py-0.5 bg-tag-bg text-tag-text rounded-md text-[11px]">
+            {f}
           </span>
         ))}
-        {report.comparison && (
-          <span className="px-2 py-0.5 rounded-full text-[0.7rem] bg-[#ecfdf5] text-[#059669]">
-            compared
+        {app.features.length > 3 && (
+          <span className="inline-flex px-2 py-0.5 text-text-dim text-[11px]">
+            +{app.features.length - 3}
           </span>
         )}
       </div>
+    </button>
+  );
+}
 
-      {/* Thumbnail Grid */}
-      {report.thumbnails && report.thumbnails.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          {report.thumbnails.map((thumb) => (
-            <button
-              key={`${thumb.url}-${thumb.viewport}`}
-              onClick={() => onThumbnailClick(thumb)}
-              className="relative group rounded-lg overflow-hidden border border-border hover:border-accent-blue transition-all cursor-pointer"
-            >
-              <img
-                src={thumb.foldPath}
-                alt={`${domainOf(thumb.url)} ${thumb.viewport}`}
-                loading="lazy"
-                className="w-full h-auto object-cover transition-transform duration-200 group-hover:scale-105"
-              />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
-                <div className="text-[0.65rem] text-white font-medium truncate">
-                  {domainOf(thumb.url)}
-                </div>
-                <div className="text-[0.58rem] text-white/70">
-                  {thumb.viewport}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+/* ─── Category section ───────────────────────────────────────────────── */
 
-      {/* View Report Link */}
-      <a
-        href={`/data/competitor-reports/${report.id}.html`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 text-[0.78rem] font-medium text-accent-blue hover:underline"
-      >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+function CategorySection({
+  category,
+  onAppClick,
+}: {
+  category: Category;
+  onAppClick: (appId: string) => void;
+}) {
+  return (
+    <section className="mb-8">
+      <div className="flex items-center gap-2 mb-4">
+        <h3 className="text-base font-semibold text-text-bright">{category.name}</h3>
+        <span className="text-xs text-text-dim">({category.nameEn})</span>
+        <span className="text-[11px] text-text-dim bg-tag-bg px-2 py-0.5 rounded-full">
+          {category.apps.length} アプリ
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {category.apps.map((app) => (
+          <AppCard key={app.id} app={app} onClick={() => onAppClick(app.id)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ─── Screenshot placeholder ─────────────────────────────────────────── */
+
+function ScreenshotPlaceholder({ label, onClick }: { label: string; onClick?: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="group relative aspect-[9/16] bg-bg-section border border-border-card rounded-xl overflow-hidden hover:shadow-[var(--shadow-card-hover)] transition-all cursor-pointer"
+    >
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-3">
+        <svg className="w-8 h-8 text-text-placeholder mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="m21 15-5-5L5 21" />
         </svg>
-        View Full Report
-      </a>
+        <span className="text-[11px] text-text-dim text-center leading-tight">{label}</span>
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute bottom-2 left-0 right-0 text-center">
+          <span className="text-[10px] text-white/80 bg-black/40 px-2 py-0.5 rounded-full">
+            スクリーンショット未登録
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ─── App detail view ────────────────────────────────────────────────── */
+
+function AppDetailView({
+  app,
+  industry,
+  category,
+  onBack,
+  onGoHome,
+  onGoIndustry,
+}: {
+  app: App;
+  industry: Industry;
+  category: Category;
+  onBack: () => void;
+  onGoHome: () => void;
+  onGoIndustry: () => void;
+}) {
+  const [selectedScreenshot, setSelectedScreenshot] = useState<number | null>(null);
+
+  return (
+    <div>
+      <Breadcrumb
+        items={[
+          { label: "ホーム", onClick: onGoHome },
+          { label: industry.name, onClick: onGoIndustry },
+          { label: category.name, onClick: onBack },
+          { label: app.name },
+        ]}
+      />
+
+      {/* Header */}
+      <div className="bg-bg-card border border-border-card rounded-2xl p-6 shadow-[var(--shadow-card)] mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-text-bright mb-1">{app.name}</h2>
+            <p className="text-sm text-text-dim mb-3">{app.company} ({app.companyEn})</p>
+            <div className="flex items-center gap-2 mb-4">
+              {app.platform.map((p) => (
+                <PlatformBadge key={p} platform={p} />
+              ))}
+            </div>
+            <p className="text-sm text-text-primary leading-relaxed max-w-2xl">{app.description}</p>
+          </div>
+
+          <div className="flex flex-wrap sm:flex-col gap-2 shrink-0">
+            {app.appUrl && (
+              <a
+                href={app.appUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue text-white text-xs font-medium rounded-lg hover:opacity-90 transition-opacity"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" strokeLinecap="round" strokeLinejoin="round" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+                公式サイト
+              </a>
+            )}
+            {app.appStoreUrl && (
+              <a
+                href={app.appStoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-platform-ios-bg text-platform-ios text-xs font-medium rounded-lg hover:opacity-80 transition-opacity"
+              >
+                App Store
+              </a>
+            )}
+            {app.playStoreUrl && (
+              <a
+                href={app.playStoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-platform-android-bg text-platform-android text-xs font-medium rounded-lg hover:opacity-80 transition-opacity"
+              >
+                Google Play
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column: Features & Strengths */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Features */}
+          <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+            <h3 className="text-sm font-semibold text-text-bright mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4 text-accent-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              主要機能
+            </h3>
+            <ul className="space-y-2">
+              {app.features.map((f, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-blue mt-1.5 shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Strengths */}
+          <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+            <h3 className="text-sm font-semibold text-text-bright mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4 text-score-high" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              UI/UXの強み
+            </h3>
+            <ul className="space-y-3">
+              {app.strengths.map((s, i) => (
+                <li key={i} className="text-sm text-text-primary bg-score-high-bg rounded-lg px-3 py-2">
+                  {s}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Right column: Screenshots */}
+        <div className="lg:col-span-2">
+          <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+            <h3 className="text-sm font-semibold text-text-bright mb-4 flex items-center gap-2">
+              <svg className="w-4 h-4 text-accent-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
+              主要画面スクリーンショット
+              <span className="text-[11px] font-normal text-text-dim">({app.screenshots.length} 画面)</span>
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {app.screenshots.map((ss, i) => (
+                <ScreenshotPlaceholder
+                  key={i}
+                  label={ss.label}
+                  onClick={() => setSelectedScreenshot(i)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Screenshot modal */}
+      {selectedScreenshot !== null && (
+        <ScreenshotModal
+          screenshots={app.screenshots}
+          currentIndex={selectedScreenshot}
+          onClose={() => setSelectedScreenshot(null)}
+          onNavigate={setSelectedScreenshot}
+        />
+      )}
     </div>
   );
 }
 
-function ScreenshotPreview({
-  thumbnail,
+/* ─── Screenshot modal ───────────────────────────────────────────────── */
+
+function ScreenshotModal({
+  screenshots,
+  currentIndex,
   onClose,
+  onNavigate,
 }: {
-  thumbnail: CompetitorThumbnail;
+  screenshots: AppScreenshot[];
+  currentIndex: number;
   onClose: () => void;
+  onNavigate: (i: number) => void;
 }) {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    },
-    [onClose]
-  );
+  const current = screenshots[currentIndex];
 
   useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && currentIndex > 0) onNavigate(currentIndex - 1);
+      if (e.key === "ArrowRight" && currentIndex < screenshots.length - 1) onNavigate(currentIndex + 1);
     };
-  }, [handleKeyDown]);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [currentIndex, screenshots.length, onClose, onNavigate]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 bg-bg-overlay flex items-center justify-center p-8" onClick={onClose}>
       <div
-        className="relative bg-bg-card rounded-[14px] border border-border shadow-2xl max-w-[90vw] max-h-[90vh] flex flex-col overflow-hidden"
+        className="relative bg-bg-card rounded-2xl shadow-[var(--shadow-modal)] max-w-2xl w-full max-h-[90vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <div>
-            <div className="text-sm font-semibold text-text-bright">
-              {domainOf(thumbnail.url)}
-            </div>
-            <div className="text-[0.72rem] text-text-dim">
-              {thumbnail.viewport} viewport
-            </div>
+            <h4 className="text-sm font-semibold text-text-bright">{current.label}</h4>
+            <p className="text-[11px] text-text-dim">{currentIndex + 1} / {screenshots.length}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-bg-hover transition-colors text-text-dim hover:text-text-bright"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          <button onClick={onClose} className="p-1.5 hover:bg-bg-hover rounded-lg transition-colors cursor-pointer">
+            <svg className="w-5 h-5 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
             </svg>
           </button>
         </div>
 
-        {/* Image */}
-        <div className="overflow-auto p-4">
-          <img
-            src={thumbnail.foldPath}
-            alt={`${domainOf(thumbnail.url)} - ${thumbnail.viewport}`}
-            className="max-w-full h-auto rounded-lg"
-          />
+        {/* Content */}
+        <div className="p-6 flex items-center justify-center min-h-[400px] bg-gallery-bg">
+          <div className="flex flex-col items-center justify-center text-center">
+            <svg className="w-16 h-16 text-text-placeholder mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="m21 15-5-5L5 21" />
+            </svg>
+            <p className="text-sm text-text-dim mb-1">スクリーンショット未登録</p>
+            <p className="text-[11px] text-text-placeholder">{current.path}</p>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex items-center justify-between px-5 py-3 border-t border-border">
+          <button
+            onClick={() => currentIndex > 0 && onNavigate(currentIndex - 1)}
+            disabled={currentIndex === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-text-primary hover:bg-bg-hover rounded-lg transition-colors disabled:opacity-30 disabled:cursor-default cursor-pointer"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path d="m15 18-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            前へ
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            {screenshots.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => onNavigate(i)}
+                className={`w-2 h-2 rounded-full transition-colors cursor-pointer ${
+                  i === currentIndex ? "bg-accent-blue" : "bg-bg-inset hover:bg-text-dim"
+                }`}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={() => currentIndex < screenshots.length - 1 && onNavigate(currentIndex + 1)}
+            disabled={currentIndex === screenshots.length - 1}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-text-primary hover:bg-bg-hover rounded-lg transition-colors disabled:opacity-30 disabled:cursor-default cursor-pointer"
+          >
+            次へ
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function EmptyState({ hasReports }: { hasReports: boolean }) {
+/* ─── Search results ─────────────────────────────────────────────────── */
+
+function SearchResults({
+  industries,
+  query,
+  onAppClick,
+}: {
+  industries: Industry[];
+  query: string;
+  onAppClick: (industryId: string, appId: string) => void;
+}) {
+  const results = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    const matches: { industry: Industry; category: Category; app: App }[] = [];
+    for (const industry of industries) {
+      for (const category of industry.categories) {
+        for (const app of category.apps) {
+          if (
+            app.name.toLowerCase().includes(q) ||
+            app.company.toLowerCase().includes(q) ||
+            app.companyEn.toLowerCase().includes(q) ||
+            app.description.toLowerCase().includes(q) ||
+            app.features.some((f) => f.toLowerCase().includes(q)) ||
+            industry.name.toLowerCase().includes(q) ||
+            category.name.toLowerCase().includes(q)
+          ) {
+            matches.push({ industry, category, app });
+          }
+        }
+      }
+    }
+    return matches;
+  }, [industries, query]);
+
+  if (!query.trim()) {
+    return (
+      <div className="text-center py-16">
+        <svg className="w-12 h-12 text-text-placeholder mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" strokeLinecap="round" />
+        </svg>
+        <p className="text-sm text-text-dim">アプリ名、企業名、機能で検索</p>
+      </div>
+    );
+  }
+
+  if (results.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-sm text-text-dim">&ldquo;{query}&rdquo; に一致するアプリが見つかりません</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="text-center py-20 text-text-dim">
-      <div className="text-5xl mb-4 opacity-30">
-        {hasReports ? "🔍" : "📸"}
+    <div>
+      <p className="text-xs text-text-dim mb-4">{results.length} 件のアプリが見つかりました</p>
+      <div className="space-y-3">
+        {results.map(({ industry, category, app }) => (
+          <button
+            key={app.id}
+            onClick={() => onAppClick(industry.id, app.id)}
+            className="w-full text-left bg-bg-card border border-border-card rounded-xl p-4 shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition-all cursor-pointer"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[11px] text-text-dim bg-tag-bg px-2 py-0.5 rounded-full">
+                    {industry.icon} {industry.name} / {category.name}
+                  </span>
+                </div>
+                <h4 className="text-sm font-semibold text-text-bright">{app.name}</h4>
+                <p className="text-[11px] text-text-dim mt-0.5">{app.company}</p>
+                <div className="flex items-center gap-1.5 mt-2">
+                  {app.platform.map((p) => (
+                    <PlatformBadge key={p} platform={p} />
+                  ))}
+                </div>
+              </div>
+              <svg className="w-4 h-4 text-text-dim shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path d="m9 18 6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </button>
+        ))}
       </div>
-      <div className="text-[0.95rem] mb-2">
-        {hasReports
-          ? "No reports match your filters"
-          : "No competitor UI reports yet"}
+    </div>
+  );
+}
+
+/* ─── Empty state ────────────────────────────────────────────────────── */
+
+function EmptyState() {
+  return (
+    <div className="text-center py-20">
+      <svg className="w-16 h-16 text-text-placeholder mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+        <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <h3 className="text-base font-semibold text-text-bright mb-2">データがありません</h3>
+      <p className="text-sm text-text-dim">
+        industries.json にデータを追加してください
+      </p>
+    </div>
+  );
+}
+
+/* ─── Main component ─────────────────────────────────────────────────── */
+
+export default function CompetitorUIView({ industries }: Props) {
+  const [view, setView] = useState<ViewState>({ type: "landing" });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchMode, setIsSearchMode] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setIsSearchMode((prev) => !prev);
+      }
+      if (e.key === "Escape" && isSearchMode) {
+        setIsSearchMode(false);
+        setSearchQuery("");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isSearchMode]);
+
+  const goHome = useCallback(() => {
+    setView({ type: "landing" });
+    setIsSearchMode(false);
+    setSearchQuery("");
+  }, []);
+
+  const goIndustry = useCallback((industryId: string) => {
+    setView({ type: "industry", industryId });
+    setIsSearchMode(false);
+    setSearchQuery("");
+  }, []);
+
+  const goApp = useCallback((industryId: string, appId: string) => {
+    setView({ type: "app", industryId, appId });
+    setIsSearchMode(false);
+    setSearchQuery("");
+  }, []);
+
+  const currentIndustry = useMemo(() => {
+    if (view.type === "industry" || view.type === "app") {
+      return industries.find((i) => i.id === view.industryId);
+    }
+    return undefined;
+  }, [industries, view]);
+
+  const currentApp = useMemo(() => {
+    if (view.type === "app" && currentIndustry) {
+      for (const cat of currentIndustry.categories) {
+        const app = cat.apps.find((a) => a.id === view.appId);
+        if (app) return { app, category: cat };
+      }
+    }
+    return undefined;
+  }, [currentIndustry, view]);
+
+  if (industries.length === 0) {
+    return (
+      <div className="max-w-6xl mx-auto px-6 py-12">
+        <EmptyState />
       </div>
-      {!hasReports && (
-        <div className="text-[0.82rem] mt-4 max-w-md mx-auto">
-          <p className="mb-2">product-hub で分析を実行してスキャン:</p>
-          <code className="block bg-bg-hover px-4 py-2 rounded-lg text-text-primary text-left">
-            pnpm competitor:analyze https://example.com
-          </code>
-          <p className="mt-2">このビューアに同期:</p>
-          <code className="block bg-bg-hover px-4 py-2 rounded-lg text-text-primary text-left">
-            pnpm scan
-          </code>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-8">
+      {/* Header */}
+      <header className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <button onClick={goHome} className="group flex items-center gap-2 cursor-pointer">
+              <h1 className="text-xl font-bold text-text-bright group-hover:text-accent-blue transition-colors">
+                Competitor UI Viewer
+              </h1>
+            </button>
+            <p className="text-xs text-text-dim mt-1">業界別 競合アプリ UI/UX リサーチ</p>
+          </div>
+          <button
+            onClick={() => setIsSearchMode(!isSearchMode)}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-dim bg-bg-card border border-border-card rounded-lg hover:border-border-strong transition-colors cursor-pointer shadow-[var(--shadow-card)]"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" strokeLinecap="round" />
+            </svg>
+            検索
+            <kbd className="hidden sm:inline text-[10px] text-text-placeholder bg-bg-section px-1.5 py-0.5 rounded border border-border-card">
+              {"\u2318"}K
+            </kbd>
+          </button>
         </div>
-      )}
+
+        {isSearchMode && (
+          <div className="mb-6">
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="アプリ名、企業名、機能で検索..."
+              autoFocus
+            />
+          </div>
+        )}
+      </header>
+
+      {isSearchMode ? (
+        <SearchResults
+          industries={industries}
+          query={searchQuery}
+          onAppClick={goApp}
+        />
+      ) : view.type === "landing" ? (
+        <div>
+          <StatsBar industries={industries} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {industries.map((industry) => (
+              <IndustryCard
+                key={industry.id}
+                industry={industry}
+                onClick={() => goIndustry(industry.id)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : view.type === "industry" && currentIndustry ? (
+        <div>
+          <Breadcrumb
+            items={[
+              { label: "ホーム", onClick: goHome },
+              { label: currentIndustry.name },
+            ]}
+          />
+          <div className="flex items-center gap-3 mb-6">
+            <span className="text-3xl">{currentIndustry.icon}</span>
+            <div>
+              <h2 className="text-xl font-bold text-text-bright">{currentIndustry.name}</h2>
+              <p className="text-xs text-text-dim">{currentIndustry.nameEn}</p>
+            </div>
+          </div>
+          <p className="text-sm text-text-dim mb-8 max-w-2xl">{currentIndustry.description}</p>
+
+          {currentIndustry.categories.map((category) => (
+            <CategorySection
+              key={category.id}
+              category={category}
+              onAppClick={(appId) => goApp(currentIndustry.id, appId)}
+            />
+          ))}
+        </div>
+      ) : view.type === "app" && currentIndustry && currentApp ? (
+        <AppDetailView
+          app={currentApp.app}
+          industry={currentIndustry}
+          category={currentApp.category}
+          onBack={() => goIndustry(currentIndustry.id)}
+          onGoHome={goHome}
+          onGoIndustry={() => goIndustry(currentIndustry.id)}
+        />
+      ) : null}
     </div>
   );
 }
