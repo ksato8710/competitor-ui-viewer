@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-page: #f8fafc;
+  --color-bg-card: #ffffff;
+  --color-bg-hover: #f1f5f9;
+  --color-text-bright: #0f172a;
+  --color-text-primary: #334155;
+  --color-text-dim: #64748b;
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-accent-blue: #2563eb;
+}
+
+body {
+  font-family: system-ui, "Noto Sans JP", sans-serif;
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+}

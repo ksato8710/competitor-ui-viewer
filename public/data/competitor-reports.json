@@ -1,0 +1,41 @@
+[
+  {
+    "id": "report-1771650474301",
+    "timestamp": "2026-02-21T05:09:51.815Z",
+    "preset": "default",
+    "urls": [
+      "https://stripe.com",
+      "https://linear.app"
+    ],
+    "viewports": [
+      "desktop"
+    ],
+    "scores": [
+      {
+        "url": "https://stripe.com",
+        "viewport": "desktop",
+        "score": 4
+      },
+      {
+        "url": "https://linear.app",
+        "viewport": "desktop",
+        "score": 4
+      }
+    ],
+    "comparison": {
+      "winner": "https://stripe.com"
+    },
+    "thumbnails": [
+      {
+        "url": "https://stripe.com",
+        "viewport": "desktop",
+        "foldPath": "/data/competitor-reports/report-1771650474301/stripe.com__desktop__2026-02-21T05-07-59-979Z__fold.png"
+      },
+      {
+        "url": "https://linear.app",
+        "viewport": "desktop",
+        "foldPath": "/data/competitor-reports/report-1771650474301/linear.app__desktop__2026-02-21T05-08-30-214Z__fold.png"
+      }
+    ]
+  }
+]
