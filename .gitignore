@@ -3,4 +3,9 @@ node_modules/
 out/
 .vercel
 .playwright-mcp/
-*.png
+
+# Dev screenshots (root level)
+/*.png
+
+# Allow screenshots in public/data/apps/
+!public/data/apps/**/*.png
