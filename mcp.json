@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "competitor-ui-viewer": {
+      "command": "npx",
+      "args": ["tsx", "mcp/server.ts"],
+      "cwd": "/Users/satokeita/Dev/competitor-ui-viewer",
+      "env": {
+        "TURSO_DATABASE_URL": "libsql://competitor-ui-viewer-ksato.aws-ap-northeast-1.turso.io",
+        "TURSO_AUTH_TOKEN": "<token>"
+      }
+    }
+  }
+}

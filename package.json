@@ -6,12 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "scan": "node scripts/scan-reports.js"
+    "scan": "node scripts/scan-reports.js",
+    "mcp:start": "tsx mcp/server.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "next": "^15.3.2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.4",
@@ -19,6 +23,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "tailwindcss": "^4.1.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.0"
   }
 }
