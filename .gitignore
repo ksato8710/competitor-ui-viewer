@@ -9,3 +9,7 @@ out/
 
 # Allow screenshots in public/data/apps/
 !public/data/apps/**/*.png
+
+# Pipeline outputs
+public/data/competitor-reports/screenshots/
+public/data/competitor-reports/report-*

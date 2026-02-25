@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "scan": "node scripts/scan-reports.js",
+    "analyze": "node pipeline/index.js",
+    "compare": "node pipeline/index.js --compare",
     "mcp:start": "tsx mcp/server.ts"
   },
   "dependencies": {
@@ -15,6 +17,7 @@
     "next": "^15.3.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "playwright": "^1.52.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

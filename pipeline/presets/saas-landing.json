@@ -1,0 +1,32 @@
+{
+  "name": "saas-landing",
+  "version": "1.0.0",
+  "description": "SaaSランディングページ特化テンプレート",
+  "extends": "default",
+  "extra_dimensions": [
+    {
+      "id": "pricing_design",
+      "name": "料金表デザイン",
+      "weight": 0.9,
+      "description": "プラン比較、CTA配置、アップセル導線",
+      "criteria": [
+        "プラン比較の見やすさ",
+        "推奨プランの視覚的強調",
+        "無料トライアル導線の明確さ",
+        "年額/月額切替UI"
+      ]
+    },
+    {
+      "id": "onboarding_flow",
+      "name": "サインアップ導線",
+      "weight": 0.8,
+      "description": "登録フローの簡潔さ、ステップ数",
+      "criteria": [
+        "フォームフィールド数",
+        "ソーシャルログイン対応",
+        "プログレス表示",
+        "即時価値提供の有無"
+      ]
+    }
+  ]
+}

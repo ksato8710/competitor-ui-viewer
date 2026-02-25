@@ -253,29 +253,52 @@ function CategorySection({
   );
 }
 
-/* ─── Screenshot placeholder ─────────────────────────────────────────── */
+/* ─── Screenshot tile ────────────────────────────────────────────────── */
 
-function ScreenshotPlaceholder({ label, onClick }: { label: string; onClick?: () => void }) {
+function ScreenshotTile({ label, path, onClick }: { label: string; path?: string; onClick?: () => void }) {
+  const [imageError, setImageError] = useState(false);
+  const hasImage = path && !imageError;
+
   return (
     <button
       onClick={onClick}
       className="group relative aspect-[9/16] bg-bg-section border border-border-card rounded-xl overflow-hidden hover:shadow-[var(--shadow-card-hover)] transition-all cursor-pointer"
     >
-      <div className="absolute inset-0 flex flex-col items-center justify-center p-3">
-        <svg className="w-8 h-8 text-text-placeholder mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <circle cx="8.5" cy="8.5" r="1.5" />
-          <path d="m21 15-5-5L5 21" />
-        </svg>
-        <span className="text-[11px] text-text-dim text-center leading-tight">{label}</span>
-      </div>
-      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="absolute bottom-2 left-0 right-0 text-center">
-          <span className="text-[10px] text-white/80 bg-black/40 px-2 py-0.5 rounded-full">
-            スクリーンショット未登録
-          </span>
-        </div>
-      </div>
+      {hasImage ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={path}
+            alt={label}
+            className="absolute inset-0 w-full h-full object-cover object-top"
+            onError={() => setImageError(true)}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className="absolute bottom-2 left-0 right-0 text-center">
+            <span className="text-[11px] text-white/90 bg-black/40 px-2 py-0.5 rounded-full">
+              {label}
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-3">
+            <svg className="w-8 h-8 text-text-placeholder mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="m21 15-5-5L5 21" />
+            </svg>
+            <span className="text-[11px] text-text-dim text-center leading-tight">{label}</span>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute bottom-2 left-0 right-0 text-center">
+              <span className="text-[10px] text-white/80 bg-black/40 px-2 py-0.5 rounded-full">
+                スクリーンショット未登録
+              </span>
+            </div>
+          </div>
+        </>
+      )}
     </button>
   );
 }
@@ -417,9 +440,10 @@ function AppDetailView({
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {app.screenshots.map((ss, i) => (
-                <ScreenshotPlaceholder
+                <ScreenshotTile
                   key={i}
                   label={ss.label}
+                  path={ss.path}
                   onClick={() => setSelectedScreenshot(i)}
                 />
               ))}
@@ -486,16 +510,25 @@ function ScreenshotModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 flex items-center justify-center min-h-[400px] bg-gallery-bg">
-          <div className="flex flex-col items-center justify-center text-center">
-            <svg className="w-16 h-16 text-text-placeholder mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="m21 15-5-5L5 21" />
-            </svg>
-            <p className="text-sm text-text-dim mb-1">スクリーンショット未登録</p>
-            <p className="text-[11px] text-text-placeholder">{current.path}</p>
-          </div>
+        <div className="p-6 flex items-center justify-center min-h-[400px] bg-gallery-bg overflow-auto">
+          {current.path ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={current.path}
+              alt={current.label}
+              className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center text-center">
+              <svg className="w-16 h-16 text-text-placeholder mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
+              <p className="text-sm text-text-dim mb-1">スクリーンショット未登録</p>
+              <p className="text-[11px] text-text-placeholder">{current.path}</p>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
