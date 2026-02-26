@@ -4,6 +4,24 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Competitor UI Viewer",
   description: "競合UIの分析レポートビューア — サムネイル表示 & インラインプレビュー",
+  openGraph: {
+    title: "Competitor UI Viewer",
+    description: "競合UIの分析・比較ビューア",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Competitor UI Viewer",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Competitor UI Viewer",
+    description: "競合UIの分析・比較ビューア",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
