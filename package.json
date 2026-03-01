@@ -9,7 +9,10 @@
     "scan": "node scripts/scan-reports.js",
     "analyze": "node pipeline/index.js",
     "compare": "node pipeline/index.js --compare",
-    "mcp:start": "tsx mcp/server.ts"
+    "mcp:start": "tsx mcp/server.ts",
+    "prepare": "husky",
+    "skills:validate": "cd $HOME/Dev/product-hub && pnpm skills:validate",
+    "skills:validate:categories": "cd $HOME/Dev/product-hub && pnpm skills:validate:categories"
   },
   "dependencies": {
     "@libsql/client": "^0.17.0",
@@ -26,6 +29,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "husky": "^9.1.7",
     "tailwindcss": "^4.1.4",
     "tsx": "^4.21.0",
     "typescript": "^5.8.0"
