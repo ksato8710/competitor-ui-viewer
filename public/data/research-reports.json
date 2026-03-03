@@ -1,0 +1,12 @@
+[
+  {
+    "id": "fido2-auth-ux",
+    "title": "FIDO2/パスキー認証移行のUX課題とAIソリューション",
+    "titleEn": "FIDO2 Auth UX Challenges & AI Solutions",
+    "date": "2026-03-03",
+    "summary": "パスキー認証への移行で急増するカスタマーサポート課題を、AIでどう解決するか",
+    "icon": "🔐",
+    "tags": ["認証UX", "AI", "カスタマーサポート"],
+    "readingTimeMinutes": 12
+  }
+]

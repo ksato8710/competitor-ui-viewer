@@ -58,3 +58,41 @@ export interface Industry {
   description: string;
   categories: Category[];
 }
+
+// --- Research Report models ---
+
+export interface ResearchSection {
+  id: string;
+  title: string;
+  content: string; // Markdown
+}
+
+export interface SolutionEntry {
+  name: string;
+  description: string;
+  strengths: string[];
+  weaknesses: string[];
+}
+
+export interface SolutionCategory {
+  category: string;
+  entries: SolutionEntry[];
+}
+
+export interface ResearchReportMeta {
+  id: string;
+  title: string;
+  titleEn: string;
+  date: string;
+  summary: string;
+  icon: string;
+  tags: string[];
+  readingTimeMinutes: number;
+}
+
+export interface ResearchReport extends ResearchReportMeta {
+  keyFindings: string[];
+  sections: ResearchSection[];
+  solutionMap?: SolutionCategory[];
+  recommendations: string[];
+}
