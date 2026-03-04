@@ -757,6 +757,13 @@ export default function CompetitorUIView({ industries }: Props) {
             </button>
             <p className="text-xs text-text-dim mt-1">業界別 競合アプリ UI/UX リサーチ</p>
           </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/about"
+              className="px-3 py-1.5 text-xs text-text-dim hover:text-text-bright transition-colors"
+            >
+              About
+            </a>
           <button
             onClick={() => setIsSearchMode(!isSearchMode)}
             className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-dim bg-bg-card border border-border-card rounded-lg hover:border-border-strong transition-colors cursor-pointer shadow-[var(--shadow-card)]"
@@ -770,6 +777,7 @@ export default function CompetitorUIView({ industries }: Props) {
               {"\u2318"}K
             </kbd>
           </button>
+          </div>
         </div>
 
         {isSearchMode && (
