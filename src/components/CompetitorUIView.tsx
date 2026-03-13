@@ -318,6 +318,26 @@ interface InspectionReport {
   competitorInsights?: string[];
 }
 
+interface ScreenDetail {
+  label: string;
+  screenType: string;
+  description: string;
+  features: string[];
+  screenshotUrl: string;
+}
+
+const SCREEN_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  home:         { label: 'ホーム',       color: 'bg-blue-100 text-blue-700' },
+  list:         { label: 'リスト',       color: 'bg-green-100 text-green-700' },
+  detail:       { label: '詳細',         color: 'bg-purple-100 text-purple-700' },
+  form:         { label: 'フォーム',     color: 'bg-amber-100 text-amber-700' },
+  settings:     { label: '設定',         color: 'bg-slate-100 text-slate-700' },
+  menu:         { label: 'メニュー',     color: 'bg-teal-100 text-teal-700' },
+  notification: { label: '通知',         color: 'bg-red-100 text-red-700' },
+  search:       { label: '検索',         color: 'bg-indigo-100 text-indigo-700' },
+  unknown:      { label: 'その他',       color: 'bg-gray-100 text-gray-600' },
+};
+
 function AppDetailView({
   app,
   industry,
@@ -335,6 +355,7 @@ function AppDetailView({
 }) {
   const [selectedScreenshot, setSelectedScreenshot] = useState<number | null>(null);
   const [report, setReport] = useState<InspectionReport | null>(null);
+  const [screenDetails, setScreenDetails] = useState<ScreenDetail[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
 
   useEffect(() => {
@@ -345,6 +366,7 @@ function AppDetailView({
       .then(data => {
         if (cancelled) return;
         if (data?.report_json) setReport(data.report_json);
+        if (data?.screens) setScreenDetails(data.screens);
         setReportLoading(false);
       })
       .catch(() => { if (!cancelled) setReportLoading(false); });
@@ -621,6 +643,70 @@ function AppDetailView({
           )}
         </div>
       </div>
+
+      {/* Per-screen detailed analysis */}
+      {screenDetails.length > 0 && screenDetails.some(s => s.description) && (
+        <div className="mt-6">
+          <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+            <h3 className="text-sm font-semibold text-text-bright mb-5 flex items-center gap-2">
+              <span>📐</span> 画面別詳細分析
+              <span className="text-[11px] font-normal text-text-dim">({screenDetails.filter(s => s.description).length} 画面)</span>
+            </h3>
+            <div className="space-y-6">
+              {screenDetails.filter(s => s.description).map((screen, i) => {
+                const typeInfo = SCREEN_TYPE_LABELS[screen.screenType] || SCREEN_TYPE_LABELS.unknown;
+                return (
+                  <div key={i} className="border border-border-card rounded-xl overflow-hidden">
+                    <div className="flex flex-col md:flex-row">
+                      {/* Screenshot */}
+                      <div className="md:w-48 lg:w-56 shrink-0 bg-bg-section flex items-center justify-center p-3">
+                        {screen.screenshotUrl ? (
+                          <img
+                            src={screen.screenshotUrl}
+                            alt={screen.label}
+                            className="max-h-80 w-auto object-contain rounded-lg shadow-sm"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-12 text-text-placeholder">
+                            <svg className="w-8 h-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <path d="m21 15-5-5L5 21" />
+                            </svg>
+                            <span className="text-[11px]">未取得</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Analysis */}
+                      <div className="flex-1 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="text-sm font-semibold text-text-bright">{screen.label}</h4>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeInfo.color}`}>
+                            {typeInfo.label}
+                          </span>
+                        </div>
+                        <p className="text-sm text-text-primary leading-relaxed mb-3">{screen.description}</p>
+                        {screen.features.length > 0 && (
+                          <div>
+                            <p className="text-[11px] font-medium text-text-dim uppercase tracking-wider mb-1.5">この画面の機能</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {screen.features.map((f, fi) => (
+                                <span key={fi} className="inline-flex px-2 py-0.5 bg-tag-bg text-tag-text rounded-md text-[11px]">
+                                  {f}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Screenshot modal */}
       {selectedScreenshot !== null && (

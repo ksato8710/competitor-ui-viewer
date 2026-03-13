@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, ensureSchema } from '@/lib/db';
 
-// GET: Fetch single inspection with full report data
+// GET: Fetch single inspection with full report data + screen details
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -22,11 +22,27 @@ export async function GET(
 
     const row = result.rows[0];
 
-    // Parse JSON fields
     const safeJson = (val: unknown) => {
       if (!val || typeof val !== 'string') return null;
       try { return JSON.parse(val); } catch { return null; }
     };
+
+    // Load full screen details (label, type, description, features, screenshot_url)
+    const screensResult = await db.execute({
+      sql: `SELECT label, screen_type, description, features, screenshot_url
+            FROM app_inspection_screens
+            WHERE inspection_id = ?
+            ORDER BY sort_order`,
+      args: [id],
+    });
+
+    const screens = screensResult.rows.map((s) => ({
+      label: String(s.label || ''),
+      screenType: String(s.screen_type || 'unknown'),
+      description: String(s.description || ''),
+      features: safeJson(s.features) || [],
+      screenshotUrl: String(s.screenshot_url || ''),
+    }));
 
     return NextResponse.json({
       id: row.id,
@@ -55,6 +71,7 @@ export async function GET(
       category_id: row.category_id,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      screens,
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
