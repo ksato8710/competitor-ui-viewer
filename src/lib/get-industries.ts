@@ -67,7 +67,7 @@ export async function getUnifiedIndustries(): Promise<Industry[]> {
     // Fetch DB apps that have a category_id
     const appsResult = await db.execute(
       `SELECT id, app_package, app_name, platform, description, company, company_en,
-              feature_analysis, characteristics, strengths, app_url, app_store_url,
+              features, feature_analysis, characteristics, strengths, app_url, app_store_url,
               play_store_url, industry_id, category_id
        FROM app_inspections
        WHERE category_id IS NOT NULL`
@@ -123,8 +123,11 @@ export async function getUnifiedIndustries(): Promise<Industry[]> {
     const appsByCategory = new Map<string, App[]>();
     for (const row of appsResult.rows) {
       const categoryId = String(row.category_id);
-      const featuresParsed = safeJsonParse(row.feature_analysis, null);
-      const features = flattenFeatures(featuresParsed);
+      // Prefer top-level features (flat string array) over feature_analysis (nested)
+      const directFeatures = safeJsonParse<string[] | null>(row.features, null);
+      const features = Array.isArray(directFeatures) && directFeatures.length > 0
+        ? directFeatures.map(String)
+        : flattenFeatures(safeJsonParse(row.feature_analysis, null));
 
       const strengthsParsed: unknown = safeJsonParse(row.strengths, null);
       const characteristicsParsed: unknown = safeJsonParse(row.characteristics, null);
