@@ -61,6 +61,47 @@ export async function POST() {
           categoriesInserted++;
         }
       }
+
+      // Ensure "その他" category exists for each industry
+      const otherId = `${ind.id}-other`;
+      const otherExisting = await db.execute({
+        sql: 'SELECT id FROM categories WHERE id = ? LIMIT 1',
+        args: [otherId],
+      });
+      if (otherExisting.rows.length === 0) {
+        await db.execute({
+          sql: `INSERT INTO categories (id, industry_id, name, name_en, sort_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          args: [otherId, ind.id, 'その他', 'Other', 999, now, now],
+        });
+        categoriesInserted++;
+      }
+    }
+
+    // Ensure a catch-all "その他" industry with "その他" category
+    const otherIndExisting = await db.execute({
+      sql: "SELECT id FROM industries WHERE id = 'other' LIMIT 1",
+      args: [],
+    });
+    if (otherIndExisting.rows.length === 0) {
+      await db.execute({
+        sql: `INSERT INTO industries (id, name, name_en, icon, description, sort_order, created_at, updated_at)
+              VALUES ('other', 'その他', 'Other', '📦', 'その他の業界・カテゴリに属さないアプリ', 999, ?, ?)`,
+        args: [now, now],
+      });
+      industriesInserted++;
+    }
+    const otherCatExisting = await db.execute({
+      sql: "SELECT id FROM categories WHERE id = 'other-general' LIMIT 1",
+      args: [],
+    });
+    if (otherCatExisting.rows.length === 0) {
+      await db.execute({
+        sql: `INSERT INTO categories (id, industry_id, name, name_en, sort_order, created_at, updated_at)
+              VALUES ('other-general', 'other', 'その他', 'Other', 0, ?, ?)`,
+        args: [now, now],
+      });
+      categoriesInserted++;
     }
 
     return NextResponse.json({
