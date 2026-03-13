@@ -12,6 +12,10 @@ import {
   RegisterCompetitorSchema,
   SearchFindingsSchema,
   UpdateFindingSchema,
+  RegisterAppInspectionSchema,
+  AddInspectionScreenSchema,
+  ListAppInspectionsSchema,
+  GetAppInspectionSchema,
 } from './schemas/index.js';
 import { generateId, getDb } from './utils/db.js';
 
@@ -146,6 +150,53 @@ async function initSchema() {
       created_at TEXT NOT NULL
     )
   `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS app_inspections (
+      id TEXT PRIMARY KEY,
+      app_package TEXT NOT NULL,
+      app_name TEXT NOT NULL,
+      platform TEXT DEFAULT 'Android',
+      description TEXT,
+      target_users TEXT,
+      app_category TEXT,
+      navigation_pattern TEXT,
+      information_architecture TEXT,
+      characteristics TEXT,
+      competitor_insights TEXT,
+      ux_insights TEXT,
+      issues TEXT,
+      feature_analysis TEXT,
+      screen_transitions TEXT,
+      key_flows TEXT,
+      summary TEXT,
+      screen_count INTEGER DEFAULT 0,
+      source_session_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS app_inspection_screens (
+      id TEXT PRIMARY KEY,
+      inspection_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      screen_type TEXT,
+      description TEXT,
+      features TEXT,
+      screenshot_url TEXT,
+      sort_order INTEGER DEFAULT 0,
+      FOREIGN KEY (inspection_id) REFERENCES app_inspections(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_inspections_app_package ON app_inspections(app_package)',
+  );
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_inspection_screens_inspection_id ON app_inspection_screens(inspection_id)',
+  );
 
   await db.execute(
     'CREATE INDEX IF NOT EXISTS idx_competitors_category ON competitors(category)',
@@ -560,6 +611,292 @@ server.registerTool(
       });
     } catch (error) {
       return errorResponse(error, '発見事項の更新に失敗しました');
+    }
+  },
+);
+
+server.registerTool(
+  'register_app_inspection',
+  {
+    description: 'App Inspectorで取得したアプリのUI分析データを登録する。スクリーンショットは別途 add_inspection_screen で登録。',
+    inputSchema: RegisterAppInspectionSchema,
+  },
+  async (params): Promise<ToolResult> => {
+    try {
+      const validated = RegisterAppInspectionSchema.parse(params);
+      const db = getDb();
+      const id = generateId();
+      const now = new Date().toISOString();
+
+      // Check if app_package already exists — update if so
+      const existing = await db.execute({
+        sql: 'SELECT id FROM app_inspections WHERE app_package = ? LIMIT 1',
+        args: [validated.app_package],
+      });
+
+      if (existing.rows.length > 0) {
+        const existingId = asString(existing.rows[0].id)!;
+        await db.execute({
+          sql: `UPDATE app_inspections SET
+            app_name = ?, platform = ?, description = ?, target_users = ?,
+            app_category = ?, navigation_pattern = ?, information_architecture = ?,
+            characteristics = ?, competitor_insights = ?, ux_insights = ?,
+            issues = ?, feature_analysis = ?, screen_transitions = ?,
+            key_flows = ?, summary = ?, source_session_id = ?, updated_at = ?
+          WHERE id = ?`,
+          args: [
+            validated.app_name,
+            validated.platform,
+            validated.description ?? null,
+            validated.target_users ?? null,
+            validated.app_category ?? null,
+            validated.navigation_pattern ?? null,
+            validated.information_architecture ?? null,
+            validated.characteristics ? JSON.stringify(validated.characteristics) : null,
+            validated.competitor_insights ? JSON.stringify(validated.competitor_insights) : null,
+            validated.ux_insights ? JSON.stringify(validated.ux_insights) : null,
+            validated.issues ? JSON.stringify(validated.issues) : null,
+            validated.feature_analysis ? JSON.stringify(validated.feature_analysis) : null,
+            validated.screen_transitions ? JSON.stringify(validated.screen_transitions) : null,
+            validated.key_flows ? JSON.stringify(validated.key_flows) : null,
+            validated.summary ?? null,
+            validated.source_session_id ?? null,
+            now,
+            existingId,
+          ],
+        });
+
+        // Delete old screens for re-registration
+        await db.execute({
+          sql: 'DELETE FROM app_inspection_screens WHERE inspection_id = ?',
+          args: [existingId],
+        });
+
+        return successResponse({
+          id: existingId,
+          message: '既存のインスペクションデータを更新しました',
+          updated: true,
+        });
+      }
+
+      await db.execute({
+        sql: `INSERT INTO app_inspections (
+          id, app_package, app_name, platform, description, target_users,
+          app_category, navigation_pattern, information_architecture,
+          characteristics, competitor_insights, ux_insights, issues,
+          feature_analysis, screen_transitions, key_flows, summary,
+          source_session_id, screen_count, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        args: [
+          id,
+          validated.app_package,
+          validated.app_name,
+          validated.platform,
+          validated.description ?? null,
+          validated.target_users ?? null,
+          validated.app_category ?? null,
+          validated.navigation_pattern ?? null,
+          validated.information_architecture ?? null,
+          validated.characteristics ? JSON.stringify(validated.characteristics) : null,
+          validated.competitor_insights ? JSON.stringify(validated.competitor_insights) : null,
+          validated.ux_insights ? JSON.stringify(validated.ux_insights) : null,
+          validated.issues ? JSON.stringify(validated.issues) : null,
+          validated.feature_analysis ? JSON.stringify(validated.feature_analysis) : null,
+          validated.screen_transitions ? JSON.stringify(validated.screen_transitions) : null,
+          validated.key_flows ? JSON.stringify(validated.key_flows) : null,
+          validated.summary ?? null,
+          validated.source_session_id ?? null,
+          now,
+          now,
+        ],
+      });
+
+      return successResponse({
+        id,
+        message: 'アプリインスペクションデータを登録しました',
+        updated: false,
+      });
+    } catch (error) {
+      return errorResponse(error, 'インスペクションデータの登録に失敗しました');
+    }
+  },
+);
+
+server.registerTool(
+  'add_inspection_screen',
+  {
+    description: 'インスペクションにスクリーン情報を追加する',
+    inputSchema: AddInspectionScreenSchema,
+  },
+  async (params): Promise<ToolResult> => {
+    try {
+      const validated = AddInspectionScreenSchema.parse(params);
+      const db = getDb();
+
+      const inspectionCheck = await db.execute({
+        sql: 'SELECT id FROM app_inspections WHERE id = ? LIMIT 1',
+        args: [validated.inspection_id],
+      });
+      if (inspectionCheck.rows.length === 0) {
+        throw new Error(`inspection_id "${validated.inspection_id}" は登録されていません`);
+      }
+
+      const id = generateId();
+      await db.execute({
+        sql: `INSERT INTO app_inspection_screens (
+          id, inspection_id, label, screen_type, description, features, screenshot_url, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          id,
+          validated.inspection_id,
+          validated.label,
+          validated.screen_type ?? null,
+          validated.description ?? null,
+          validated.features ? JSON.stringify(validated.features) : null,
+          validated.screenshot_url ?? null,
+          validated.sort_order ?? 0,
+        ],
+      });
+
+      // Update screen_count
+      await db.execute({
+        sql: `UPDATE app_inspections SET screen_count = (
+          SELECT COUNT(*) FROM app_inspection_screens WHERE inspection_id = ?
+        ) WHERE id = ?`,
+        args: [validated.inspection_id, validated.inspection_id],
+      });
+
+      return successResponse({ id, message: 'スクリーン情報を追加しました' });
+    } catch (error) {
+      return errorResponse(error, 'スクリーン情報の追加に失敗しました');
+    }
+  },
+);
+
+server.registerTool(
+  'list_app_inspections',
+  {
+    description: '登録済みアプリインスペクション一覧を取得する',
+    inputSchema: ListAppInspectionsSchema,
+  },
+  async (params): Promise<ToolResult> => {
+    try {
+      const validated = ListAppInspectionsSchema.parse(params);
+      const db = getDb();
+
+      const where: string[] = [];
+      const args: InValue[] = [];
+
+      if (validated.platform) {
+        where.push('platform = ?');
+        args.push(validated.platform);
+      }
+      args.push(validated.limit);
+
+      const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
+      const result = await db.execute({
+        sql: `SELECT id, app_package, app_name, platform, app_category,
+              screen_count, summary, created_at, updated_at
+              FROM app_inspections ${whereClause}
+              ORDER BY updated_at DESC LIMIT ?`,
+        args,
+      });
+
+      const inspections = (result.rows as DbRow[]).map((row) => ({
+        id: asString(row.id),
+        appPackage: asString(row.app_package),
+        appName: asString(row.app_name),
+        platform: asString(row.platform),
+        appCategory: asString(row.app_category),
+        screenCount: Number(row.screen_count ?? 0),
+        summary: asString(row.summary),
+        createdAt: asString(row.created_at),
+        updatedAt: asString(row.updated_at),
+      }));
+
+      return successResponse({ count: inspections.length, inspections });
+    } catch (error) {
+      return errorResponse(error, 'インスペクション一覧の取得に失敗しました');
+    }
+  },
+);
+
+server.registerTool(
+  'get_app_inspection',
+  {
+    description: '特定アプリのインスペクション詳細を取得する（スクリーン一覧含む）',
+    inputSchema: GetAppInspectionSchema,
+  },
+  async (params): Promise<ToolResult> => {
+    try {
+      const validated = GetAppInspectionSchema.parse(params);
+      const db = getDb();
+
+      const lookupValue = validated.id ?? validated.app_package;
+      if (!lookupValue) throw new Error('id または app_package のいずれかを指定してください');
+
+      const inspectionResult = await db.execute({
+        sql: validated.id
+          ? 'SELECT * FROM app_inspections WHERE id = ? LIMIT 1'
+          : 'SELECT * FROM app_inspections WHERE app_package = ? LIMIT 1',
+        args: [lookupValue],
+      });
+
+      const row = inspectionResult.rows[0] as DbRow | undefined;
+      if (!row) throw new Error('指定したインスペクションが見つかりません');
+
+      const inspectionId = asString(row.id)!;
+
+      const screensResult = await db.execute({
+        sql: 'SELECT * FROM app_inspection_screens WHERE inspection_id = ? ORDER BY sort_order',
+        args: [inspectionId],
+      });
+
+      const screens = (screensResult.rows as DbRow[]).map((s) => ({
+        id: asString(s.id),
+        label: asString(s.label),
+        screenType: asString(s.screen_type),
+        description: asString(s.description),
+        features: s.features ? JSON.parse(asString(s.features)!) : [],
+        screenshotUrl: asString(s.screenshot_url),
+        sortOrder: Number(s.sort_order ?? 0),
+      }));
+
+      const parseJsonField = (val: unknown) => {
+        const str = asString(val);
+        if (!str) return null;
+        try { return JSON.parse(str); } catch { return null; }
+      };
+
+      return successResponse({
+        inspection: {
+          id: inspectionId,
+          appPackage: asString(row.app_package),
+          appName: asString(row.app_name),
+          platform: asString(row.platform),
+          description: asString(row.description),
+          targetUsers: asString(row.target_users),
+          appCategory: asString(row.app_category),
+          navigationPattern: asString(row.navigation_pattern),
+          informationArchitecture: asString(row.information_architecture),
+          characteristics: parseJsonField(row.characteristics),
+          competitorInsights: parseJsonField(row.competitor_insights),
+          uxInsights: parseJsonField(row.ux_insights),
+          issues: parseJsonField(row.issues),
+          featureAnalysis: parseJsonField(row.feature_analysis),
+          screenTransitions: parseJsonField(row.screen_transitions),
+          keyFlows: parseJsonField(row.key_flows),
+          summary: asString(row.summary),
+          screenCount: Number(row.screen_count ?? 0),
+          sourceSessionId: asString(row.source_session_id),
+          createdAt: asString(row.created_at),
+          updatedAt: asString(row.updated_at),
+          screens,
+        },
+      });
+    } catch (error) {
+      return errorResponse(error, 'インスペクション詳細の取得に失敗しました');
     }
   },
 );
