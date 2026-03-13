@@ -1,64 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient, type Client } from '@libsql/client';
-
-let schemaInitialized = false;
-
-function getDb() {
-  const url = process.env.TURSO_DATABASE_URL;
-  const authToken = process.env.TURSO_AUTH_TOKEN;
-  if (!url || !authToken) {
-    throw new Error('TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are required');
-  }
-  return createClient({ url, authToken });
-}
-
-async function ensureSchema(db: Client) {
-  if (schemaInitialized) return;
-  await db.executeMultiple(`
-    CREATE TABLE IF NOT EXISTS app_inspections (
-      id TEXT PRIMARY KEY,
-      app_package TEXT NOT NULL UNIQUE,
-      app_name TEXT NOT NULL,
-      platform TEXT DEFAULT 'Android',
-      description TEXT,
-      target_users TEXT,
-      app_category TEXT,
-      navigation_pattern TEXT,
-      information_architecture TEXT,
-      characteristics TEXT,
-      competitor_insights TEXT,
-      ux_insights TEXT,
-      issues TEXT,
-      feature_analysis TEXT,
-      screen_transitions TEXT,
-      key_flows TEXT,
-      summary TEXT,
-      source_session_id TEXT,
-      screen_count INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS app_inspection_screens (
-      id TEXT PRIMARY KEY,
-      inspection_id TEXT NOT NULL,
-      label TEXT NOT NULL,
-      screen_type TEXT,
-      description TEXT,
-      features TEXT,
-      screenshot_url TEXT,
-      screenshot_data TEXT,
-      sort_order INTEGER DEFAULT 0,
-      FOREIGN KEY (inspection_id) REFERENCES app_inspections(id) ON DELETE CASCADE
-    );
-  `);
-  // Add screenshot_data column if missing (migration for existing tables)
-  try {
-    await db.execute('ALTER TABLE app_inspection_screens ADD COLUMN screenshot_data TEXT');
-  } catch {
-    // Column already exists — ignore
-  }
-  schemaInitialized = true;
-}
+import { getDb, ensureSchema } from '@/lib/db';
 
 function generateId() {
   return crypto.randomUUID();
@@ -70,7 +11,7 @@ export async function GET() {
     const db = getDb();
     await ensureSchema(db);
     const result = await db.execute(
-      'SELECT id, app_package, app_name, platform, app_category, screen_count, summary, created_at, updated_at FROM app_inspections ORDER BY updated_at DESC LIMIT 50'
+      'SELECT id, app_package, app_name, platform, app_category, industry_id, category_id, company, screen_count, summary, created_at, updated_at FROM app_inspections ORDER BY updated_at DESC LIMIT 50'
     );
     return NextResponse.json({ inspections: result.rows });
   } catch (error) {
@@ -104,7 +45,10 @@ export async function POST(request: Request) {
           app_category = ?, navigation_pattern = ?, information_architecture = ?,
           characteristics = ?, competitor_insights = ?, ux_insights = ?,
           issues = ?, feature_analysis = ?, screen_transitions = ?,
-          key_flows = ?, summary = ?, source_session_id = ?, updated_at = ?
+          key_flows = ?, summary = ?, source_session_id = ?,
+          industry_id = ?, category_id = ?, company = ?, company_en = ?,
+          strengths = ?, app_url = ?, app_store_url = ?, play_store_url = ?,
+          updated_at = ?
         WHERE id = ?`,
         args: [
           body.app_name, body.platform || 'Android',
@@ -119,6 +63,10 @@ export async function POST(request: Request) {
           body.screen_transitions ? JSON.stringify(body.screen_transitions) : null,
           body.key_flows ? JSON.stringify(body.key_flows) : null,
           body.summary || null, body.source_session_id || null,
+          body.industry_id || null, body.category_id || null,
+          body.company || null, body.company_en || null,
+          body.strengths ? JSON.stringify(body.strengths) : null,
+          body.app_url || null, body.app_store_url || null, body.play_store_url || null,
           now, inspectionId,
         ],
       });
@@ -132,8 +80,10 @@ export async function POST(request: Request) {
           app_category, navigation_pattern, information_architecture,
           characteristics, competitor_insights, ux_insights, issues,
           feature_analysis, screen_transitions, key_flows, summary,
-          source_session_id, screen_count, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+          source_session_id, industry_id, category_id, company, company_en,
+          strengths, app_url, app_store_url, play_store_url,
+          screen_count, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
         args: [
           inspectionId, body.app_package, body.app_name,
           body.platform || 'Android',
@@ -148,6 +98,10 @@ export async function POST(request: Request) {
           body.screen_transitions ? JSON.stringify(body.screen_transitions) : null,
           body.key_flows ? JSON.stringify(body.key_flows) : null,
           body.summary || null, body.source_session_id || null,
+          body.industry_id || null, body.category_id || null,
+          body.company || null, body.company_en || null,
+          body.strengths ? JSON.stringify(body.strengths) : null,
+          body.app_url || null, body.app_store_url || null, body.play_store_url || null,
           now, now,
         ],
       });

@@ -1,19 +1,10 @@
-import fs from "fs";
-import path from "path";
 import CompetitorUIView from "@/components/CompetitorUIView";
 import ResearchHighlightSection from "@/components/research/ResearchHighlightSection";
 import { getResearchIndex } from "@/lib/research";
-import type { Industry } from "@/lib/types";
+import { getUnifiedIndustries } from "@/lib/get-industries";
 
-function getIndustries(): Industry[] {
-  const filePath = path.join(process.cwd(), "public", "data", "industries.json");
-  if (!fs.existsSync(filePath)) return [];
-  const raw = fs.readFileSync(filePath, "utf8");
-  return JSON.parse(raw);
-}
-
-export default function Page() {
-  const industries = getIndustries();
+export default async function Page() {
+  const industries = await getUnifiedIndustries();
   const researchReports = getResearchIndex();
   return (
     <>

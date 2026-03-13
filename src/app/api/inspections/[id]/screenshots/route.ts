@@ -1,14 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@libsql/client';
-
-function getDb() {
-  const url = process.env.TURSO_DATABASE_URL;
-  const authToken = process.env.TURSO_AUTH_TOKEN;
-  if (!url || !authToken) {
-    throw new Error('TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are required');
-  }
-  return createClient({ url, authToken });
-}
+import { getDb } from '@/lib/db';
 
 // POST: Upload screenshot for an inspection screen
 export async function POST(
