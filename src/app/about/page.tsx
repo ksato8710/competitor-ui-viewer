@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "このサイトについて — Competitor UI Viewer",
+  title: "このサイトについて — AppUIUXLab",
   description:
     "デジタルプロダクトのUI・UX・サービス設計を横断的にリサーチ・比較し、知見を統合するプラットフォーム",
 };
@@ -92,7 +92,7 @@ export default function AboutPage() {
             このサイトについて
           </h1>
           <p className="text-sm text-text-dim leading-relaxed max-w-2xl">
-            Competitor UI Viewer は、デジタルプロダクトの
+            AppUIUXLab は、デジタルプロダクトの
             <strong className="text-text-bright"> UI・UX・サービス設計</strong>
             を横断的にリサーチ・比較し、得られた知見を統合するプラットフォームです。
           </p>

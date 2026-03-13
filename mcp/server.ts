@@ -30,7 +30,7 @@ type ToolResult = {
 type DbRow = Record<string, unknown>;
 
 const server = new McpServer({
-  name: 'competitor-ui-viewer-mcp',
+  name: 'app-ui-ux-lab-mcp',
   version: '1.0.0',
 });
 
@@ -903,14 +903,14 @@ server.registerTool(
 
 async function main() {
   await initSchema();
-  console.error('Competitor UI Viewer MCP: Schema initialized');
+  console.error('AppUIUXLab MCP: Schema initialized');
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('Competitor UI Viewer MCP Server running on stdio');
+  console.error('AppUIUXLab MCP Server running on stdio');
 }
 
 main().catch((error) => {
-  console.error('Competitor UI Viewer MCP Server failed to start', error);
+  console.error('AppUIUXLab MCP Server failed to start', error);
   process.exitCode = 1;
 });

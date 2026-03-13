@@ -1018,7 +1018,7 @@ export default function CompetitorUIView({ industries }: Props) {
           <div>
             <button onClick={goHome} className="group flex items-center gap-2 cursor-pointer">
               <h1 className="text-xl font-bold text-text-bright group-hover:text-accent-blue transition-colors">
-                Competitor UI Viewer
+                AppUIUXLab
               </h1>
             </button>
             <p className="text-xs text-text-dim mt-1">業界別 競合アプリ UI/UX リサーチ</p>

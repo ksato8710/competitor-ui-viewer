@@ -3,10 +3,10 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Competitor UI Viewer",
+  title: "AppUIUXLab",
   description: "競合UIの分析レポートビューア — サムネイル表示 & インラインプレビュー",
   openGraph: {
-    title: "Competitor UI Viewer",
+    title: "AppUIUXLab",
     description: "競合UIの分析・比較ビューア",
     type: "website",
     images: [
@@ -14,13 +14,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Competitor UI Viewer",
+        alt: "AppUIUXLab",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Competitor UI Viewer",
+    title: "AppUIUXLab",
     description: "競合UIの分析・比較ビューア",
   },
 };

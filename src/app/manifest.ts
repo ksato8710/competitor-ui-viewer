@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Competitor UI Viewer',
+    name: 'AppUIUXLab',
     short_name: 'UI Viewer',
     description: '競合UIスクリーンショット閲覧ツール',
     start_url: '/',
