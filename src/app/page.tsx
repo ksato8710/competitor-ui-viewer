@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import CompetitorUIView from "@/components/CompetitorUIView";
 import ResearchHighlightSection from "@/components/research/ResearchHighlightSection";
 import { getResearchIndex } from "@/lib/research";
@@ -8,7 +9,9 @@ export default async function Page() {
   const researchReports = getResearchIndex();
   return (
     <>
-      <CompetitorUIView industries={industries} />
+      <Suspense>
+        <CompetitorUIView industries={industries} />
+      </Suspense>
       <div className="max-w-6xl mx-auto px-6 pb-12">
         <ResearchHighlightSection reports={researchReports} />
       </div>

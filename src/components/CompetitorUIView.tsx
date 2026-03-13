@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import type { Industry, Category, App, AppScreenshot } from "@/lib/types";
 
 /* ─── Props ──────────────────────────────────────────────────────────── */
@@ -682,9 +683,19 @@ function EmptyState() {
 /* ─── Main component ─────────────────────────────────────────────────── */
 
 export default function CompetitorUIView({ industries }: Props) {
-  const [view, setView] = useState<ViewState>({ type: "landing" });
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchMode, setIsSearchMode] = useState(false);
+
+  // Derive view state from URL search params
+  const view = useMemo((): ViewState => {
+    const industryId = searchParams.get("industry");
+    const appId = searchParams.get("app");
+    if (industryId && appId) return { type: "app", industryId, appId };
+    if (industryId) return { type: "industry", industryId };
+    return { type: "landing" };
+  }, [searchParams]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -702,22 +713,22 @@ export default function CompetitorUIView({ industries }: Props) {
   }, [isSearchMode]);
 
   const goHome = useCallback(() => {
-    setView({ type: "landing" });
+    router.push("/");
     setIsSearchMode(false);
     setSearchQuery("");
-  }, []);
+  }, [router]);
 
   const goIndustry = useCallback((industryId: string) => {
-    setView({ type: "industry", industryId });
+    router.push(`/?industry=${encodeURIComponent(industryId)}`);
     setIsSearchMode(false);
     setSearchQuery("");
-  }, []);
+  }, [router]);
 
   const goApp = useCallback((industryId: string, appId: string) => {
-    setView({ type: "app", industryId, appId });
+    router.push(`/?industry=${encodeURIComponent(industryId)}&app=${encodeURIComponent(appId)}`);
     setIsSearchMode(false);
     setSearchQuery("");
-  }, []);
+  }, [router]);
 
   const currentIndustry = useMemo(() => {
     if (view.type === "industry" || view.type === "app") {
