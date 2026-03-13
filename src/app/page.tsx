@@ -4,6 +4,8 @@ import ResearchHighlightSection from "@/components/research/ResearchHighlightSec
 import { getResearchIndex } from "@/lib/research";
 import { getUnifiedIndustries } from "@/lib/get-industries";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const industries = await getUnifiedIndustries();
   const researchReports = getResearchIndex();
