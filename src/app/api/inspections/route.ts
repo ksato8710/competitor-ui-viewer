@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@libsql/client';
+import { createClient, type Client } from '@libsql/client';
+
+let schemaInitialized = false;
 
 function getDb() {
   const url = process.env.TURSO_DATABASE_URL;
@@ -10,6 +12,47 @@ function getDb() {
   return createClient({ url, authToken });
 }
 
+async function ensureSchema(db: Client) {
+  if (schemaInitialized) return;
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS app_inspections (
+      id TEXT PRIMARY KEY,
+      app_package TEXT NOT NULL UNIQUE,
+      app_name TEXT NOT NULL,
+      platform TEXT DEFAULT 'Android',
+      description TEXT,
+      target_users TEXT,
+      app_category TEXT,
+      navigation_pattern TEXT,
+      information_architecture TEXT,
+      characteristics TEXT,
+      competitor_insights TEXT,
+      ux_insights TEXT,
+      issues TEXT,
+      feature_analysis TEXT,
+      screen_transitions TEXT,
+      key_flows TEXT,
+      summary TEXT,
+      source_session_id TEXT,
+      screen_count INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS app_inspection_screens (
+      id TEXT PRIMARY KEY,
+      inspection_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      screen_type TEXT,
+      description TEXT,
+      features TEXT,
+      screenshot_url TEXT,
+      sort_order INTEGER DEFAULT 0,
+      FOREIGN KEY (inspection_id) REFERENCES app_inspections(id) ON DELETE CASCADE
+    );
+  `);
+  schemaInitialized = true;
+}
+
 function generateId() {
   return crypto.randomUUID();
 }
@@ -18,6 +61,7 @@ function generateId() {
 export async function GET() {
   try {
     const db = getDb();
+    await ensureSchema(db);
     const result = await db.execute(
       'SELECT id, app_package, app_name, platform, app_category, screen_count, summary, created_at, updated_at FROM app_inspections ORDER BY updated_at DESC LIMIT 50'
     );
@@ -31,6 +75,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const db = getDb();
+    await ensureSchema(db);
     const body = await request.json();
     const now = new Date().toISOString();
 
