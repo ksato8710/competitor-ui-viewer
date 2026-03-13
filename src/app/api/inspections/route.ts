@@ -46,10 +46,17 @@ async function ensureSchema(db: Client) {
       description TEXT,
       features TEXT,
       screenshot_url TEXT,
+      screenshot_data TEXT,
       sort_order INTEGER DEFAULT 0,
       FOREIGN KEY (inspection_id) REFERENCES app_inspections(id) ON DELETE CASCADE
     );
   `);
+  // Add screenshot_data column if missing (migration for existing tables)
+  try {
+    await db.execute('ALTER TABLE app_inspection_screens ADD COLUMN screenshot_data TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
   schemaInitialized = true;
 }
 
