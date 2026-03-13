@@ -83,6 +83,7 @@ export async function ensureSchema(db: Client) {
     'ALTER TABLE app_inspections ADD COLUMN app_store_url TEXT',
     'ALTER TABLE app_inspections ADD COLUMN play_store_url TEXT',
     'ALTER TABLE app_inspections ADD COLUMN features TEXT',
+    'ALTER TABLE app_inspections ADD COLUMN report_json TEXT',
   ];
   for (const sql of alterColumns) {
     try {

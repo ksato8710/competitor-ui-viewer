@@ -306,6 +306,18 @@ function ScreenshotTile({ label, path, onClick }: { label: string; path?: string
 
 /* ─── App detail view ────────────────────────────────────────────────── */
 
+interface InspectionReport {
+  summary?: string;
+  appOverview?: { description?: string; targetUsers?: string; appCategory?: string };
+  featureAnalysis?: { category: string; features: { name: string; description: string; screens: string[]; importance: string }[] }[];
+  appStructure?: { navigationPattern?: string; informationArchitecture?: string; keyFlows?: { name: string; steps: string[] }[] };
+  screenMap?: { label: string; screenType: string; description: string; features: string[] }[];
+  screenTransitions?: { from: string; to: string; trigger: string; description: string }[];
+  characteristics?: string[];
+  issues?: { severity: string; category: string; description: string; affectedScreens: string[] }[];
+  competitorInsights?: string[];
+}
+
 function AppDetailView({
   app,
   industry,
@@ -322,6 +334,22 @@ function AppDetailView({
   onGoIndustry: () => void;
 }) {
   const [selectedScreenshot, setSelectedScreenshot] = useState<number | null>(null);
+  const [report, setReport] = useState<InspectionReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReportLoading(true);
+    fetch(`/api/inspections/${app.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled) return;
+        if (data?.report_json) setReport(data.report_json);
+        setReportLoading(false);
+      })
+      .catch(() => { if (!cancelled) setReportLoading(false); });
+    return () => { cancelled = true; };
+  }, [app.id]);
 
   return (
     <div>
@@ -339,7 +367,7 @@ function AppDetailView({
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-text-bright mb-1">{app.name}</h2>
-            <p className="text-sm text-text-dim mb-3">{app.company} ({app.companyEn})</p>
+            <p className="text-sm text-text-dim mb-3">{app.company}{app.companyEn ? ` (${app.companyEn})` : ''}</p>
             <div className="flex items-center gap-2 mb-4">
               {app.platform.map((p) => (
                 <PlatformBadge key={p} platform={p} />
@@ -350,37 +378,20 @@ function AppDetailView({
 
           <div className="flex flex-wrap sm:flex-col gap-2 shrink-0">
             {app.appUrl && (
-              <a
-                href={app.appUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue text-white text-xs font-medium rounded-lg hover:opacity-90 transition-opacity"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" strokeLinecap="round" strokeLinejoin="round" />
-                  <polyline points="15 3 21 3 21 9" />
-                  <line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
+              <a href={app.appUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-blue text-white text-xs font-medium rounded-lg hover:opacity-90 transition-opacity">
                 公式サイト
               </a>
             )}
             {app.appStoreUrl && (
-              <a
-                href={app.appStoreUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-platform-ios-bg text-platform-ios text-xs font-medium rounded-lg hover:opacity-80 transition-opacity"
-              >
+              <a href={app.appStoreUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-platform-ios-bg text-platform-ios text-xs font-medium rounded-lg hover:opacity-80 transition-opacity">
                 App Store
               </a>
             )}
             {app.playStoreUrl && (
-              <a
-                href={app.playStoreUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-platform-android-bg text-platform-android text-xs font-medium rounded-lg hover:opacity-80 transition-opacity"
-              >
+              <a href={app.playStoreUrl} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-platform-android-bg text-platform-android text-xs font-medium rounded-lg hover:opacity-80 transition-opacity">
                 Google Play
               </a>
             )}
@@ -388,68 +399,226 @@ function AppDetailView({
         </div>
       </div>
 
+      {/* Summary banner */}
+      {report?.summary && (
+        <div className="bg-accent-blue/5 border border-accent-blue/20 rounded-xl p-5 mb-6">
+          <h3 className="text-sm font-semibold text-accent-blue mb-2 flex items-center gap-2">
+            <span>📋</span> 総合サマリー
+          </h3>
+          <p className="text-sm text-text-primary leading-relaxed">{report.summary}</p>
+        </div>
+      )}
+
+      {/* Screenshots row */}
+      {app.screenshots.length > 0 && (
+        <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)] mb-6">
+          <h3 className="text-sm font-semibold text-text-bright mb-4 flex items-center gap-2">
+            <span>🗺️</span>
+            主要画面スクリーンショット
+            <span className="text-[11px] font-normal text-text-dim">({app.screenshots.length} 画面)</span>
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {app.screenshots.map((ss, i) => (
+              <ScreenshotTile key={i} label={ss.label} path={ss.path} onClick={() => setSelectedScreenshot(i)} />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: Features & Strengths */}
         <div className="lg:col-span-1 space-y-6">
           {/* Features */}
-          <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
-            <h3 className="text-sm font-semibold text-text-bright mb-3 flex items-center gap-2">
-              <svg className="w-4 h-4 text-accent-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              主要機能
-            </h3>
-            <ul className="space-y-2">
-              {app.features.map((f, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent-blue mt-1.5 shrink-0" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {app.features.length > 0 && (
+            <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+              <h3 className="text-sm font-semibold text-text-bright mb-3 flex items-center gap-2">
+                <span>🔍</span> 主要機能
+              </h3>
+              <ul className="space-y-2">
+                {app.features.map((f, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-text-primary">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-blue mt-1.5 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Strengths */}
-          <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
-            <h3 className="text-sm font-semibold text-text-bright mb-3 flex items-center gap-2">
-              <svg className="w-4 h-4 text-score-high" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              UI/UXの強み
-            </h3>
-            <ul className="space-y-3">
-              {app.strengths.map((s, i) => (
-                <li key={i} className="text-sm text-text-primary bg-score-high-bg rounded-lg px-3 py-2">
-                  {s}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {app.strengths.length > 0 && (
+            <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+              <h3 className="text-sm font-semibold text-text-bright mb-3 flex items-center gap-2">
+                <span>⭐</span> UX特性・強み
+              </h3>
+              <ul className="space-y-3">
+                {app.strengths.map((s, i) => (
+                  <li key={i} className="text-sm text-text-primary bg-score-high-bg rounded-lg px-3 py-2">{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* App Structure (from report) */}
+          {report?.appStructure && (
+            <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+              <h3 className="text-sm font-semibold text-text-bright mb-3 flex items-center gap-2">
+                <span>🏗️</span> アプリ構造
+              </h3>
+              {report.appStructure.navigationPattern && (
+                <div className="mb-3">
+                  <p className="text-[11px] font-medium text-text-dim uppercase tracking-wider mb-1">ナビゲーションパターン</p>
+                  <p className="text-sm text-text-primary bg-bg-section rounded-lg px-3 py-2">{report.appStructure.navigationPattern}</p>
+                </div>
+              )}
+              {report.appStructure.informationArchitecture && (
+                <div className="mb-3">
+                  <p className="text-[11px] font-medium text-text-dim uppercase tracking-wider mb-1">情報設計</p>
+                  <p className="text-sm text-text-primary leading-relaxed">{report.appStructure.informationArchitecture}</p>
+                </div>
+              )}
+              {report.appStructure.keyFlows && report.appStructure.keyFlows.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-medium text-text-dim uppercase tracking-wider mb-2">主要フロー</p>
+                  <div className="space-y-3">
+                    {report.appStructure.keyFlows.map((flow, i) => (
+                      <div key={i}>
+                        <p className="text-xs font-medium text-text-bright mb-1">{flow.name}</p>
+                        <ol className="space-y-0.5">
+                          {flow.steps.map((step, j) => (
+                            <li key={j} className="flex items-start gap-2 text-xs text-text-secondary">
+                              <span className="text-accent-blue font-medium shrink-0 w-4 text-right">{j + 1}.</span>
+                              {step}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Right column: Screenshots */}
-        <div className="lg:col-span-2">
-          <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
-            <h3 className="text-sm font-semibold text-text-bright mb-4 flex items-center gap-2">
-              <svg className="w-4 h-4 text-accent-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="m21 15-5-5L5 21" />
-              </svg>
-              主要画面スクリーンショット
-              <span className="text-[11px] font-normal text-text-dim">({app.screenshots.length} 画面)</span>
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {app.screenshots.map((ss, i) => (
-                <ScreenshotTile
-                  key={i}
-                  label={ss.label}
-                  path={ss.path}
-                  onClick={() => setSelectedScreenshot(i)}
-                />
-              ))}
+        {/* Right column: Report sections */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Feature Analysis (detailed, from report) */}
+          {report?.featureAnalysis && report.featureAnalysis.length > 0 && (
+            <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+              <h3 className="text-sm font-semibold text-text-bright mb-4 flex items-center gap-2">
+                <span>🔍</span> 機能分析
+              </h3>
+              <div className="space-y-4">
+                {report.featureAnalysis.map((cat, ci) => (
+                  <div key={ci}>
+                    <h4 className="text-xs font-semibold text-text-dim uppercase tracking-wider mb-2 border-b border-border-card pb-1">{cat.category}</h4>
+                    <div className="space-y-2">
+                      {cat.features.map((f, fi) => (
+                        <div key={fi} className="bg-bg-section rounded-lg px-3 py-2.5">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-text-bright">{f.name}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                              f.importance === 'core' ? 'bg-accent-blue/10 text-accent-blue' :
+                              f.importance === 'secondary' ? 'bg-amber-500/10 text-amber-600' :
+                              'bg-bg-section text-text-dim'
+                            }`}>{f.importance}</span>
+                          </div>
+                          <p className="text-xs text-text-secondary leading-relaxed">{f.description}</p>
+                          {f.screens.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {f.screens.map((s, si) => (
+                                <span key={si} className="text-[10px] text-text-dim bg-bg-card px-1.5 py-0.5 rounded">{s}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Screen Transitions (from report) */}
+          {report?.screenTransitions && report.screenTransitions.length > 0 && (
+            <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+              <h3 className="text-sm font-semibold text-text-bright mb-4 flex items-center gap-2">
+                <span>🗺️</span> 画面遷移フロー
+              </h3>
+              <div className="space-y-2">
+                {report.screenTransitions.map((t, i) => (
+                  <div key={i} className="bg-bg-section rounded-lg px-3 py-2.5 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-medium text-text-bright bg-bg-card px-2 py-0.5 rounded">{t.from}</span>
+                      <span className="text-text-dim">→</span>
+                      <span className="text-xs font-medium text-text-bright bg-bg-card px-2 py-0.5 rounded">{t.to}</span>
+                    </div>
+                    <span className="text-[10px] text-accent-blue bg-accent-blue/5 px-1.5 py-0.5 rounded shrink-0">{t.trigger}</span>
+                    <span className="text-xs text-text-secondary">{t.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Issues (from report) */}
+          {report?.issues && report.issues.length > 0 && (
+            <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+              <h3 className="text-sm font-semibold text-text-bright mb-4 flex items-center gap-2">
+                <span>⚠️</span> 課題・改善点
+              </h3>
+              <div className="space-y-2">
+                {report.issues.map((issue, i) => (
+                  <div key={i} className={`rounded-lg px-3 py-2.5 border-l-3 ${
+                    issue.severity === 'critical' ? 'bg-red-500/5 border-l-red-500' :
+                    issue.severity === 'major' ? 'bg-amber-500/5 border-l-amber-500' :
+                    'bg-blue-500/5 border-l-blue-500'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        issue.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                        issue.severity === 'major' ? 'bg-amber-100 text-amber-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>{issue.severity}</span>
+                      <span className="text-[10px] text-text-dim">{issue.category}</span>
+                    </div>
+                    <p className="text-xs text-text-primary leading-relaxed">{issue.description}</p>
+                    {issue.affectedScreens.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {issue.affectedScreens.map((s, si) => (
+                          <span key={si} className="text-[10px] text-text-dim bg-bg-card px-1.5 py-0.5 rounded">{s}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Competitive Analysis (from report) */}
+          {report?.competitorInsights && report.competitorInsights.length > 0 && (
+            <div className="bg-bg-card border border-border-card rounded-xl p-5 shadow-[var(--shadow-card)]">
+              <h3 className="text-sm font-semibold text-text-bright mb-3 flex items-center gap-2">
+                <span>🏆</span> 競合ポジショニング
+              </h3>
+              <ul className="space-y-3">
+                {report.competitorInsights.map((insight, i) => (
+                  <li key={i} className="text-sm text-text-primary bg-bg-section rounded-lg px-3 py-2.5 leading-relaxed">{insight}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Loading state */}
+          {reportLoading && (
+            <div className="bg-bg-card border border-border-card rounded-xl p-8 shadow-[var(--shadow-card)] flex items-center justify-center gap-2 text-sm text-text-dim">
+              <span className="inline-block w-4 h-4 border-2 border-border-card border-t-accent-blue rounded-full animate-spin" />
+              レポートデータを読み込み中...
+            </div>
+          )}
         </div>
       </div>
 

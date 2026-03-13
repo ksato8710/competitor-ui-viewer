@@ -48,7 +48,7 @@ export async function POST(request: Request) {
           key_flows = ?, summary = ?, source_session_id = ?,
           industry_id = ?, category_id = ?, company = ?, company_en = ?,
           strengths = ?, app_url = ?, app_store_url = ?, play_store_url = ?,
-          features = ?, updated_at = ?
+          features = ?, report_json = ?, updated_at = ?
         WHERE id = ?`,
         args: [
           body.app_name, body.platform || 'Android',
@@ -68,6 +68,7 @@ export async function POST(request: Request) {
           body.strengths ? JSON.stringify(body.strengths) : null,
           body.app_url || null, body.app_store_url || null, body.play_store_url || null,
           body.features ? JSON.stringify(body.features) : null,
+          body.report_json ? JSON.stringify(body.report_json) : null,
           now, inspectionId,
         ],
       });
@@ -83,8 +84,8 @@ export async function POST(request: Request) {
           feature_analysis, screen_transitions, key_flows, summary,
           source_session_id, industry_id, category_id, company, company_en,
           strengths, app_url, app_store_url, play_store_url, features,
-          screen_count, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+          report_json, screen_count, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
         args: [
           inspectionId, body.app_package, body.app_name,
           body.platform || 'Android',
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
           body.strengths ? JSON.stringify(body.strengths) : null,
           body.app_url || null, body.app_store_url || null, body.play_store_url || null,
           body.features ? JSON.stringify(body.features) : null,
+          body.report_json ? JSON.stringify(body.report_json) : null,
           now, now,
         ],
       });
