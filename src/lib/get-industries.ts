@@ -56,6 +56,14 @@ export async function getUnifiedIndustries(): Promise<Industry[]> {
     const db = getDb();
     await ensureSchema(db);
 
+    // Fetch DB industries and categories (always, even with 0 apps)
+    const dbIndustriesResult = await db.execute(
+      'SELECT id, name, name_en, icon, description FROM industries ORDER BY sort_order, name'
+    );
+    const dbCategoriesResult = await db.execute(
+      'SELECT id, industry_id, name, name_en FROM categories ORDER BY sort_order, name'
+    );
+
     // Fetch DB apps that have a category_id
     const appsResult = await db.execute(
       `SELECT id, app_package, app_name, platform, description, company, company_en,
@@ -65,15 +73,10 @@ export async function getUnifiedIndustries(): Promise<Industry[]> {
        WHERE category_id IS NOT NULL`
     );
 
-    if (appsResult.rows.length === 0) {
-      return staticIndustries;
-    }
-
     // Fetch screens for these apps
     const inspectionIds = appsResult.rows.map((r) => String(r.id));
     const screensMap = new Map<string, AppScreenshot[]>();
 
-    // Query screens in batches (libSQL doesn't support IN with dynamic lists easily)
     for (const inspId of inspectionIds) {
       const screensResult = await db.execute({
         sql: 'SELECT label, screenshot_url FROM app_inspection_screens WHERE inspection_id = ? ORDER BY sort_order',
@@ -87,14 +90,6 @@ export async function getUnifiedIndustries(): Promise<Industry[]> {
         }))
       );
     }
-
-    // Fetch DB industries and categories
-    const dbIndustriesResult = await db.execute(
-      'SELECT id, name, name_en, icon, description FROM industries ORDER BY sort_order, name'
-    );
-    const dbCategoriesResult = await db.execute(
-      'SELECT id, industry_id, name, name_en FROM categories ORDER BY sort_order, name'
-    );
 
     // Build DB-only industry map
     const dbIndustryMap = new Map<string, Industry>();
@@ -163,24 +158,36 @@ export async function getUnifiedIndustries(): Promise<Industry[]> {
       appsByCategory.get(categoryId)!.push(app);
     }
 
-    // Merge DB apps into static industries
-    const mergedIndustries = staticIndustries.map((ind) => ({
-      ...ind,
-      categories: ind.categories.map((cat) => {
-        const dbApps = appsByCategory.get(cat.id);
-        if (dbApps) {
-          appsByCategory.delete(cat.id);
-          return { ...cat, apps: [...cat.apps, ...dbApps] };
-        }
-        return cat;
-      }),
-    }));
+    // Merge DB apps into static industries, and add DB-only categories
+    const mergedIndustries = staticIndustries.map((ind) => {
+      const merged = {
+        ...ind,
+        categories: ind.categories.map((cat) => {
+          const dbApps = appsByCategory.get(cat.id);
+          if (dbApps) {
+            appsByCategory.delete(cat.id);
+            return { ...cat, apps: [...cat.apps, ...dbApps] };
+          }
+          return cat;
+        }),
+      };
 
-    // Static industry lookup by id
+      // Add DB-only categories for this industry (e.g. "その他")
+      for (const [catId, entry] of dbCategoryMap.entries()) {
+        if (entry.industryId !== ind.id) continue;
+        if (merged.categories.find((c) => c.id === catId)) continue;
+        const apps = appsByCategory.get(catId) || [];
+        appsByCategory.delete(catId);
+        merged.categories.push({ ...entry.category, apps });
+      }
+
+      return merged;
+    });
+
+    // Merge remaining DB apps into categories not in static JSON
     const staticIndustryIds = new Set(staticIndustries.map((i) => i.id));
     const staticCategoryIds = new Set(staticIndustries.flatMap((i) => i.categories.map((c) => c.id)));
 
-    // Add remaining DB apps (categories not in static JSON)
     for (const [categoryId, apps] of appsByCategory.entries()) {
       const dbCatEntry = dbCategoryMap.get(categoryId);
       if (!dbCatEntry) continue;
@@ -188,15 +195,12 @@ export async function getUnifiedIndustries(): Promise<Industry[]> {
       const { industryId, category } = dbCatEntry;
       category.apps = apps;
 
-      // Find or create industry in merged list
       const existingIndustry = mergedIndustries.find((i) => i.id === industryId);
       if (existingIndustry) {
-        // Industry exists but category doesn't
         if (!staticCategoryIds.has(categoryId)) {
           existingIndustry.categories.push(category);
         }
       } else {
-        // Industry doesn't exist in static - check if we already added it
         const alreadyAdded = mergedIndustries.find((i) => i.id === industryId);
         if (alreadyAdded) {
           alreadyAdded.categories.push(category);
@@ -207,6 +211,22 @@ export async function getUnifiedIndustries(): Promise<Industry[]> {
           }
         }
       }
+    }
+
+    // Add DB-only industries that aren't in static JSON (e.g. "その他")
+    // even if they have 0 apps, so they appear on the homepage
+    for (const [industryId, dbInd] of dbIndustryMap.entries()) {
+      if (mergedIndustries.find((i) => i.id === industryId)) continue;
+
+      // Attach categories from DB
+      const cats: Category[] = [];
+      for (const [, entry] of dbCategoryMap.entries()) {
+        if (entry.industryId === industryId) {
+          const apps = appsByCategory.get(entry.category.id) || [];
+          cats.push({ ...entry.category, apps });
+        }
+      }
+      mergedIndustries.push({ ...dbInd, categories: cats });
     }
 
     return mergedIndustries;
